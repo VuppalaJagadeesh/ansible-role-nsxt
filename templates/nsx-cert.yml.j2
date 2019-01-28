@@ -1,0 +1,15 @@
+[ req ]
+default_bits = 2048
+distinguished_name = req_distinguished_name
+req_extensions = req_ext
+prompt = no
+[ req_distinguished_name ]
+countryName = "{{nsxt_cert_country}}"
+stateOrProvinceName = "{{nsxt_cert_city}}"
+localityName = CA
+organizationName = "{{nsxt_cert_org_name}}"
+commonName = "{{ nsx_manager_ip }}"
+[ req_ext ]
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = "{{ nsx_manager_ip }}"

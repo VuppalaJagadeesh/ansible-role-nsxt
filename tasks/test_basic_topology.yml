@@ -1,0 +1,757 @@
+#Tier-0 with VLAN
+#Tier-1 with OVERLAY
+
+
+
+- ignore_errors: true
+  name: deploy NSX Manager OVA
+  tags:
+    - nsxt_node_deploy
+  nsxt_deploy_ova:
+     ovftool_path: "/usr/bin"
+     datacenter:  '{{ vcenter_datacenter }}'
+     datastore: "{{ names_of_mgmt_datastore }}"
+     portgroup: "{{vcenter_mgmgt_pg}}"
+     cluster: "{{mgmt_cluster_name}}"
+     vmname: "{{nsx_manager_vm_name}}"
+     hostname: "{{nsx_manager_host_name}}"
+     dns_server: "{{dns_server}}"
+     dns_domain: "{{dns_domain}}"
+     ntp_server: "{{ntp_servers}}"
+     gateway: "{{nsx_manager_defualt_gateway}}"
+     ip_address: "{{nsx_manager_ip}}"
+     netmask: "{{nsx_manager_subnetmask}}"
+     admin_password: "{{nsx_manager_root_pwd}}"
+     cli_password: "{{nsx_manager_cli_pwd}}"
+     path_to_ova: "/var/www/html/downloads/nsxt"
+     ova_file: "nsx-unified-appliance-2.3.0.0.0.10085405.ova"
+     vcenter: "{{vcenter_host_ip}}"
+     vcenter_user: "{{vcenter_user}}"
+     vcenter_passwd: "{{vcenter_pwd}}"
+     deployment_size: "{{nsx_manager_deployment_size}}"
+     role: "nsx-manager"
+
+- ignore_errors: false
+  name: Check manager status
+  tags:
+    - nsxt_node_deploy
+  nsxt_manager_status:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     wait_time: 50
+
+- name: Deploy compute manager
+  tags:
+    - nsxt_node_deploy
+  nsxt_fabric_compute_managers:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     display_name: "{{nsx_compute_manager_name}}"
+     server: "{{vcenter_host_ip}}" 
+     origin_type: vCenter
+     credential:
+        credential_type: UsernamePasswordLoginCredential
+        username: "{{vcenter_user}}"
+        password: "{{vcenter_pwd}}"
+     state: present
+  register: compute_manager 
+ 
+ 
+- name: Getting Vcenter moids
+  tags:
+    - nsxt_node_deploy
+  nsxt_vcenter_moids:
+     hostname: "{{vcenter_host_ip}}"
+     username: "{{vcenter_user}}"
+     password: "{{vcenter_pwd}}"
+     datacenter: "{{vcenter_datacenter}}"
+     cluster: "{{mgmt_cluster_name}}"
+     datastore: "{{ names_of_mgmt_datastore }}"
+     portgroup1: "{{vcenter_mgmgt_pg}}" 
+     portgroup2: "{{nsx_edge_uplink_network_name}}"
+     portgroup3: "{{nsx_edge_overlay_network_name}}" 
+     portgroup4: "{{nsx_edge_portgroup_external}}"
+  register: moids
+
+- name: Getting Details of Controller 
+  tags:
+    - nsxt_node_deploy
+  nsxt_controller_details:
+  register: controller_details
+
+- ignore_errors: true
+  name: Deploy controller
+  tags:
+    - nsxt_node_deploy
+  nsxt_controllers:
+      hostname: "{{nsx_manager_ip}}" 
+      username: "{{nsx_manager_username}}"
+      password: "{{nsx_manager_root_pwd}}"
+      validate_certs: "{{validate_certs}}"
+      deployment_requests:
+      - roles:
+        - CONTROLLER
+        form_factor: "{{nsx_controller_deployment_size}}"
+        user_settings:
+          cli_password: "{{nsx_edge_cli_pwd}}"
+          root_password: "{{nsx_edge_root_pwd}}"
+        deployment_config:
+          placement_type: VsphereClusterNodeVMDeploymentConfig
+          vc_id: "{{compute_manager.id}}"
+          management_network_id: "{{moids.portgroup1_id}}"
+          hostname: "{{item.display_name}}"
+          compute_id: "{{moids.cluster_id}}"
+          storage_id: "{{moids.datastore_id}}"
+          default_gateway_addresses:
+          - "{{nsx_edge_defualt_gw}}"
+          management_port_subnets:
+          - ip_addresses:
+            - "{{item.ip_address}}"
+            prefix_length: "{{nsx_controller_prefix_length}}"
+      clustering_config:
+        clustering_type: ControlClusteringConfig
+        shared_secret: "{{nsx_controller_shared_secret}}"
+        join_to_existing_cluster: false
+      state: present
+  with_items:
+    - "{{ controller_details.result.Controller_nodes }}"
+
+- name: Getting the Thumbprint and Remaining Details for Fabric Node
+  tags:
+    - nsxt_node_deploy
+  nsxt_fabric_details:
+  register: fabric_details
+
+- ignore_errors: true
+  name: Add fabric node
+  tags:
+    - nsxt_node_deploy
+  nsxt_fabric_nodes:
+    hostname: "{{nsx_manager_ip}}" 
+    username: "{{nsx_manager_username}}"
+    password: "{{nsx_manager_root_pwd}}"
+    validate_certs: "{{validate_certs}}"
+    resource_type: "HostNode"
+    display_name: "{{item.display_name}}"
+    ip_addresses: "{{item.ip_address}}"
+    os_type: "{{os_type}}"
+    os_version: "{{item.os_version}}"
+    host_credential:
+        username: "{{esxi_username}}"
+        password: "{{item.host_password}}"
+        thumbprint: "{{item.host_thumbprint}}"
+    state: "present"
+  with_items:
+    - "{{ fabric_details.result.fabric_host_nodes }}"
+
+- ignore_errors: false
+  name: Test the Fabric Node deployment
+  tags:
+    - nsxt_node_deploy
+  nsxt_fabric_nodes_facts:
+    hostname: "{{nsx_manager_ip}}" 
+    username: "{{nsx_manager_username}}"
+    password: "{{nsx_manager_root_pwd}}"
+    validate_certs: False
+
+- name: Creating IPAM NODE Block 
+  tags:
+    - nsxt_node_deploy
+  nsxt_ip_blocks:
+    hostname: "{{nsx_manager_ip}}" 
+    username: "{{nsx_manager_username}}"
+    password: "{{nsx_manager_root_pwd}}"
+    validate_certs: "{{validate_certs}}"
+    display_name: "{{node_ip_block_name}}"
+    cidr: "{{node_ip_block_cidr}}"
+    state: present
+- name: Creating IPAM POD Block 
+  tags:
+    - nsxt_node_deploy
+  nsxt_ip_blocks:
+    hostname: "{{nsx_manager_ip}}" 
+    username: "{{nsx_manager_username}}"
+    password: "{{nsx_manager_root_pwd}}"
+    validate_certs: "{{validate_certs}}"
+    display_name: "{{pod_ip_block_name}}"
+    cidr: "{{pod_ip_block_cidr}}"
+    state: present
+
+- name: Create IP pool
+  tags:
+    - nsxt_node_deploy
+  nsxt_ip_pools:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     display_name: "{{lb_ip_pool_name}}"
+     subnets:
+     - allocation_ranges:
+       - start: "{{lb_ip_pool_start}}"
+         end: "{{lb_ip_pool_end}}"
+       cidr: "{{lb_ip_pool_cidr}}"
+     state: present
+
+- name: Create VTEP pool
+  tags:
+    - nsxt_node_deploy
+  nsxt_ip_pools:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     display_name: "{{vtep_ip_pool_name}}"
+     subnets:
+     - allocation_ranges:
+       - start: "{{vtep_ip_pool_start}}"
+         end: "{{vtep_ip_pool_end}}"
+       cidr: "{{vtep_ip_pool_cidr}}"
+     state: present
+
+- name: Create transport zone
+  tags:
+    - nsxt_node_deploy
+  nsxt_transport_zones:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     resource_type: "TransportZone"
+     display_name: "{{item.display_name}}"
+     description: "NSX configured Test Transport Zone"
+     transport_type: "{{item.transport_type}}"
+     host_switch_name: "{{item.host_switch_name}}"
+     state: "present"
+  with_items:
+    - display_name: "{{overlay_transport_zone_name}}"
+      transport_type: "{{overlay_transport_type}}"
+      host_switch_name: "{{overlay_switch_name}}"
+    - display_name: "{{vlan_transport_zone_name}}"
+      transport_type: "{{vlan_transport_type}}"
+      host_switch_name: "{{vlan_switch_name}}"
+
+- name: Create uplink profile
+  tags:
+    - nsxt_node_deploy
+  nsxt_uplink_profiles:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     resource_type: UplinkHostSwitchProfile
+     display_name: "{{uplink_profile1_name}}"
+     mtu: "{{uplink_mtu_value}}"
+     teaming:
+       active_list:
+       - uplink_name: "{{uplink1_name}}"
+         uplink_type: PNIC
+       policy: FAILOVER_ORDER
+     transport_vlan: "{{transport_valn_id}}"
+     state: "present"
+
+
+- name: Getting Details of Edge 
+  tags:
+    - nsxt_node_deploy
+  nsxt_edge_details:
+  register: edge_details
+
+
+- name: Deploying Edge VM
+  tags:
+    - nsxt_node_deploy
+  nsxt_fabric_nodes:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     resource_type: "EdgeNode"
+     display_name: "{{item.display_name}}"
+     ip_addresses:
+       - "{{item.ip_address}}"
+     deployment_config:
+       form_factor: "{{nsx_edge_deployment_size}}"
+       node_user_settings:
+         cli_password: "{{nsx_edge_cli_pwd}}"
+         root_password: "{{nsx_edge_root_pwd}}"
+       vm_deployment_config:
+         placement_type: VsphereDeploymentConfig
+         vc_id: "{{compute_manager.id}}"
+         data_network_ids:
+         - "{{moids.portgroup2_id}}"
+         - "{{moids.portgroup3_id}}"
+         - "{{moids.portgroup1_id}}"
+         management_network_i: "{{moids.portgroup1_id}}"
+         hostname: "{{item.display_name}}"
+         compute_id: "{{moids.cluster_id}}"
+         storage_id: "{{moids.datastore_id}}"
+         default_gateway_addresses:
+         - "{{nsx_edge_defualt_gw}}"
+         management_port_subnets:
+         - ip_addresses:
+           - "{{item.ip_address}}"
+           prefix_length: "{{nsx_edge_prefix_length}}"
+     state: present
+  with_items:
+    - "{{ edge_details.result.Edge_nodes }}"
+
+- name: Getting Details of Transport Node
+  tags:
+    - nsxt_node_deploy
+  nsxt_transport_node_details:
+  register: tn_details 
+
+- name: Create transport node for Host
+  tags:
+    - nsxt_node_deploy
+  nsxt_transport_nodes:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     resource_type: TransportNode
+     display_name: "{{item.ip_address}}"
+     description: NSX configured Test Transport Node
+     host_switch_spec:
+       resource_type: StandardHostSwitchSpec
+       host_switches:
+       - host_switch_profiles:
+         - name: "{{uplink_profile1_name}}"
+           type: UplinkHostSwitchProfile
+         host_switch_name: "{{overlay_switch_name}}"
+         pnics:
+         - device_name: "{{item.vmnic}}"
+           uplink_name: "{{uplink1_name}}"
+         ip_assignment_spec:
+            resource_type: "StaticIpPoolSpec"
+            ip_pool_name: "{{vtep_ip_pool_name}}"
+     transport_zone_endpoints: 
+     - transport_zone_name: "{{overlay_transport_zone_name}}"
+     fabric_node_name: "{{item.ip_address}}"
+     state: present
+  with_items:
+    - "{{ tn_details.id.transport_host_nodes }}"
+
+- name: Getting Details of Transport Node
+  tags:
+    - nsxt_node_deploy
+  nsxt_transport_node_edge_details:
+  register: tn_edge_details
+
+
+- name: Create Transport node for Edge
+  tags:
+    - nsxt_node_deploy
+  nsxt_transport_nodes:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     resource_type: TransportNode
+     display_name: "{{item.node_name}}"
+     description: NSX configured Edge Transport Node
+     host_switch_spec:
+       resource_type: StandardHostSwitchSpec
+       host_switches:
+       - host_switch_profiles:
+         - name: "{{uplink_profile1_name}}"
+           type: UplinkHostSwitchProfile
+         host_switch_name: "{{overlay_switch_name}}"
+         pnics:
+         - device_name: "{{nsx_edge_tn_second_network}}"
+           uplink_name: "{{uplink1_name}}"
+         ip_assignment_spec:
+           resource_type: StaticIpPoolSpec
+           ip_pool_name: "{{vtep_ip_pool_name}}"
+
+       - host_switch_profiles:
+         - name: "{{uplink_profile1_name}}"
+           type: UplinkHostSwitchProfile
+         host_switch_name: "{{vlan_switch_name}}"
+         pnics:
+         - device_name: "{{nsx_edge_tn_third_network}}"
+           uplink_name: "{{uplink1_name}}"
+         ip_assignment_spec:
+           resource_type: StaticIpPoolSpec
+           ip_pool_name: "{{vtep_ip_pool_name}}"
+
+     transport_zone_endpoints: 
+        - transport_zone_name: "{{overlay_transport_zone_name}}"
+        - transport_zone_name: "{{vlan_transport_zone_name}}"
+     fabric_node_name: "{{item.host_name}}"
+     state: present
+  with_items:
+    - "{{ tn_edge_details.id.transport_edge_nodes }}"
+
+
+- name: Getting Profile ID
+  tags:
+    - nsxt_node_deploy
+  nsxt_edge_profile_id:
+     hostname: "{{nsx_manager_ip}}"  
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     edge_profile: "{{nsx_edge_cluster_profile_name}}"
+     state: present
+  register: profileId
+
+- name: Add edge cluster
+  tags:
+    - nsxt_node_deploy
+  nsxt_edge_clusters:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     display_name: "{{ nsx_edge_cluster_name }}"
+     cluster_profile_bindings:
+       - profile_id: "{{ profileId.id }}"
+         resource_type: EdgeHighAvailabilityProfile
+     members:
+       - transport_node_name: "{{nsx_edge_tn_node1_name}}"
+       - transport_node_name: "{{nsx_edge_tn_node2_name}}"        
+     state: present
+
+
+- name: Create Overlay logical switch
+  tags:
+    - nsxt_node_deploy 
+  nsxt_logical_switches:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{logical_switch_for_overlay_network}}"
+        replication_mode: SOURCE
+        admin_state: UP
+        transport_zone_name: "{{overlay_transport_zone_name}}"
+        state: "present"
+       
+- name: Create Vlan logical switch
+  tags:
+    - nsxt_node_deploy 
+  nsxt_logical_switches:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{logical_switch_for_vlan_network}}"
+        replication_mode: SOURCE
+        admin_state: UP
+        transport_zone_name: "{{vlan_transport_zone_name}}"
+        state: "present"
+        vlan: "{{logical_switch_vlan_id}}"
+
+
+- name: Create logical Port for Logical Overlay Switch
+  tags:
+    - nsxt_node_deploy 
+  nsxt_logical_ports:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{logical_port_for_overlay}}"
+        logical_switch_name: "{{logical_switch_for_overlay_network}}"
+        admin_state: UP
+        state: "present"
+  register: logicalswitchport1
+
+- name: Create logical Port for Logical VLAN Switch
+  tags:
+    - nsxt_node_deploy 
+  nsxt_logical_ports:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{logical_port_for_vlan}}"
+        logical_switch_name: "{{logical_switch_for_vlan_network}}"
+        admin_state: UP
+        state: "present"
+  register: logicalswitchport2
+
+
+- name: Create logical router  Tier-0
+  tags:
+    - nsxt_node_deploy
+  nsxt_logical_routers:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{t0_router_name}}"
+        edge_cluster_name: "{{ nsx_edge_cluster_name }}"
+        router_type: "{{t0_router_type}}"
+        high_availability_mode: ACTIVE_STANDBY
+        state: "present"
+  register: tier0
+
+- name: Create logical router  Tier-1
+  tags:
+    - nsxt_node_deploy
+  nsxt_logical_routers:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{t1_router_name}}"
+        edge_cluster_name: "{{ nsx_edge_cluster_name }}"
+        router_type: "{{t1_router_type}}"
+        failover_mode: PREEMPTIVE
+        high_availability_mode: ACTIVE_STANDBY
+        state: "present"
+  register: tier1
+
+- name: Create logical router port Tier-0
+  tags:
+    - nsxt_node_deploy
+  nsxt_logical_router_ports:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{t0_router_port_display_name}}"
+        resource_type: LogicalRouterUpLinkPort
+        logical_router_id: "{{ tier0.id }}"
+        linked_logical_switch_port_id:
+          target_type: LogicalPort
+          target_id: "{{ logicalswitchport2.id }}"
+        edge_cluster_member_index : "{{edge_cluster_member_index}}"
+        subnets:
+        - ip_addresses:
+          - "{{t0_router_port_ip}}"
+          prefix_length: "{{t0_router_port_prefix_length}}"
+        state: "present"
+
+- name: Create logical router port Tier-1
+  tags:
+    - nsxt_node_deploy
+  nsxt_logical_router_ports:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{t1_router_port_display_name}}"
+        resource_type: LogicalRouterDownLinkPort
+        logical_router_id: "{{ tier1.id }}"
+        linked_logical_switch_port_id:
+          target_type: LogicalPort
+          target_id: "{{ logicalswitchport1.id }}"
+        subnets:
+        - ip_addresses:
+          - "{{t1_router_port_ip}}"
+          prefix_length: "{{t1_router_port_prefix_length}}"
+        state: "present"
+
+- name: Create Linking Port on TIER-0
+  tags:
+    - nsxt_node_deploy
+  nsxt_logical_router_ports:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{t1_link_port_name}}'
+        resource_type: LogicalRouterLinkPortOnTIER0
+        logical_router_id: "{{ tier0.id }}"
+        state: "present"
+  register: linking
+
+- name: Create Linking Port on TIER-1
+  tags:
+    - nsxt_node_deploy
+  nsxt_logical_router_ports:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        display_name: "{{t0_link_port_name}}"
+        resource_type: LogicalRouterLinkPortOnTIER1
+        logical_router_id: "{{ tier1.id }}"
+        linked_logical_router_port_id:
+           target_type: LogicalRouterLinkPortOnTIER0
+           target_id: "{{ linking.id }}"
+        state: "present"
+
+- name: Create Tier-0 Static Route
+  tags:
+    - nsxt_node_deploy
+  nsxt_logical_router_static_routes:
+        hostname: "{{nsx_manager_ip}}" 
+        username: "{{nsx_manager_username}}"
+        password: "{{nsx_manager_root_pwd}}"
+        validate_certs: "{{validate_certs}}"
+        logical_router_id: "{{ tier0.id }}"
+        next_hops:
+        - administrative_distance: "{{administrative_distance}}"
+          ip_address: "{{logical_router_t0_static_route_ip}}"
+        network: "{{logical_router_t0_static_route_network}}"
+        state: present
+
+
+
+- name: SNAT rules on Ops Manager
+  tags:
+    - nsxt_node_deploy
+  nsxt_nat_rules:
+     hostname: "{{nsx_manager_ip}}"  
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     router_name: "{{t0_router_name}}"
+     action: "{{snat_type_for_opsmgr}}"
+     match_source_network: "{{snat_source_ip_for_opsmgr}}"
+     translated_network: "{{snat_translated_ip_for_opsmgr}}"
+     match_service: 
+         resource_type: "L4PortSetNSService"
+         source_ports: ["9000"]
+         destination_ports: ["9000"]
+         l4_protocol: "TCP"
+     enabled: true
+     state: present
+  when: pks_topology == 'NAT'
+
+- name: DNAT rules on Ops Manager
+  tags:
+    - nsxt_node_deploy
+  nsxt_nat_rules:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     router_name: "{{t0_router_name}}"
+     action: "{{dnat_type_for_opsmgr}}"
+     match_destination_network: "{{dnat_destination_ip_for_opsmgr}}"
+     translated_network: "{{dnat_translated_ip_for_opsmgr}}"
+     enabled: true
+     state: present
+  when: pks_topology == 'NAT'
+
+- name: SNAT rules on vCenter/NSX Manager
+  tags:
+    - nsxt_node_deploy
+  nsxt_nat_rules:
+     hostname: "{{nsx_manager_ip}}"  
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     router_name: "{{t0_router_name}}"
+     action: "{{snat_type_for_vcenter_nsx}}"
+     match_source_network: "{{snat_source_ip_for_vcenter}}"
+     translated_network: "{{snat_translated_ip_for_vcenter}}"
+     match_service: 
+         resource_type: "L4PortSetNSService"
+         source_ports: ["9000"]
+         destination_ports: ["9000"]
+         l4_protocol: "TCP"
+     enabled: true
+     state: present
+  when: pks_topology == 'NAT'
+
+- name: DNAT rules on vCenter/NSX Manager
+  tags:
+    - nsxt_node_deploy
+  nsxt_nat_rules:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     router_name: "{{t0_router_name}}"
+     action: "{{dnat_type_for_vcenter_nsx}}"
+     match_destination_network: "{{dnat_destination_ip_for_vcenter}}"
+     translated_network: "{{dnat_translated_ip_for_vcenter}}"
+     enabled: true
+     state: present
+  when: pks_topology == 'NAT'
+- name: SNAT rules on ESXi
+  tags:
+    - nsxt_node_deploy
+  nsxt_nat_rules:
+     hostname: "{{nsx_manager_ip}}"  
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     router_name: "{{t0_router_name}}"
+     action: "{{snat_type_for_esxi}}"
+     match_source_network: "{{snat_source_ip_for_esxi}}"
+     translated_network: "{{snat_translated_ip_for_esxi}}"
+     match_service: 
+         resource_type: "L4PortSetNSService"
+         source_ports: ["9000"]
+         destination_ports: ["9000"]
+         l4_protocol: "TCP"
+     enabled: true
+     state: present
+  when: pks_topology == 'NAT'
+
+- name: DNAT rules on ESXi
+  tags:
+    - nsxt_node_deploy
+  nsxt_nat_rules:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     router_name: "{{t0_router_name}}"
+     action: "{{dnat_type_for_esxi}}"
+     match_destination_network: "{{dnat_destination_ip_for_esxi}}"
+     translated_network: "{{dnat_translated_ip_for_esxi}}"
+     enabled: true
+     state: present
+  when: pks_topology == 'NAT'
+
+- name: Creating Route Advertisement
+  tags:
+    - nsxt_node_deploy
+  nsxt_route_advertisement:
+     hostname: "{{nsx_manager_ip}}" 
+     username: "{{nsx_manager_username}}"
+     password: "{{nsx_manager_root_pwd}}"
+     validate_certs: "{{validate_certs}}"
+     resource_type: "AdvertisementConfig"
+     router_name: "{{t1_router_name}}"
+     advertise_nsx_connected_routes: True
+     advertise_static_routes: True
+     advertise_nat_routes: True
+     advertise_lb_vip: True
+     advertise_lb_snat_ip: True
+     enabled : True
+
+- name: Super User and It's Certificate Creation
+  tags:
+    - nsxt_node_deploy
+  nsxt_superuser:
+      hostname : 192.168.100.106
+      username : vmware
+      password : VMware1!
+      NSX_MANAGER : "{{nsx_manager_ip}}" 
+      NSX_USER : "{{nsx_manager_username}}"
+      NSX_PASSWORD: "{{nsx_manager_root_pwd}}"
+      validate_certs: "{{validate_certs}}"
+      PI_NAME : "nsxt_pks_superuser"
+
+- name: Creating Cert file
+  tags:
+    - nsxt_node_deploy
+  template: src=../templates/nsx-cert.yml.j2 dest=/opt/chaperone-ansible/roles/nsxt/defaults/nsx-cert.cnf
+
+- name: Creating Self Signed Certificate
+  tags:
+    - nsxt_node_deploy
+  nsxt_selfsigned:
+      hostname : 192.168.100.106
+      username : vmware
+      password : VMware1!
+      NSX_MANAGER_IP_ADDRESS : "{{nsx_manager_ip}}" 
+      NSX_MANAGER_COMMONNAME : "nsxc-01a.corp.local"
+      NSX_USER : "{{nsx_manager_username}}"
+      NSX_PASSWORD : "{{nsx_manager_root_pwd}}"
+      validate_certs : False
+      cert_name : "nsxt_selfsigned_cert_test"
