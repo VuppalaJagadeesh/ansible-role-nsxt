@@ -1,6 +1,6 @@
-# ansible-role-nsx
+# ansible-role-nsxt
 
-Ansible playbook to automate installing and maintaining VMware NSX.
+Ansible playbook to automate installing and maintaining VMware NSXT.
 
 ## Requirements
 
@@ -21,10 +21,10 @@ ovftool: /usr/local/bin/ovftool/ovftool
 
 ```yaml
 ---
-- hosts: nsx
+- hosts: nsxt
   sudo: True
   roles:
-    - nsx
+    - nsxt
   vars:
     - ... forthcoming
 ```
