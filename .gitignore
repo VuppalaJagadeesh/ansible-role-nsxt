@@ -1,4 +1,4 @@
 .DS_Store
 files/**
-tasks/base-config-nsx.yml
-tasks/deploy-nsx-ova.yml
+tasks/base-config-nsxt.yml
+tasks/deploy-nsxt-ova.yml
