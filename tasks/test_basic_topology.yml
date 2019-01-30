@@ -285,8 +285,8 @@
          data_network_ids:
          - "{{moids.portgroup2_id}}"
          - "{{moids.portgroup3_id}}"
-         - "{{moids.portgroup1_id}}"
-         management_network_i: "{{moids.portgroup1_id}}"
+         - "{{moids.portgroup4_id}}"
+         management_network_id: "{{moids.portgroup1_id}}"
          hostname: "{{item.display_name}}"
          compute_id: "{{moids.cluster_id}}"
          storage_id: "{{moids.datastore_id}}"
@@ -523,7 +523,7 @@
         linked_logical_switch_port_id:
           target_type: LogicalPort
           target_id: "{{ logicalswitchport2.id }}"
-        edge_cluster_member_index : "{{edge_cluster_member_index}}"
+        edge_cluster_member_index : 0
         subnets:
         - ip_addresses:
           - "{{t0_router_port_ip}}"
@@ -558,7 +558,7 @@
         username: "{{nsx_manager_username}}"
         password: "{{nsx_manager_root_pwd}}"
         validate_certs: "{{validate_certs}}"
-        display_name: "{{t1_link_port_name}}'
+        display_name: "{{t1_link_port_name}}"
         resource_type: LogicalRouterLinkPortOnTIER0
         logical_router_id: "{{ tier0.id }}"
         state: "present"
@@ -728,7 +728,7 @@
   tags:
     - nsxt_node_deploy
   nsxt_superuser:
-      hostname : 192.168.100.106
+      hostname : 192.168.100.228
       username : vmware
       password : VMware1!
       NSX_MANAGER : "{{nsx_manager_ip}}" 
@@ -746,7 +746,7 @@
   tags:
     - nsxt_node_deploy
   nsxt_selfsigned:
-      hostname : 192.168.100.106
+      hostname : 192.168.100.228
       username : vmware
       password : VMware1!
       NSX_MANAGER_IP_ADDRESS : "{{nsx_manager_ip}}" 
