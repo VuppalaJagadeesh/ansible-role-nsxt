@@ -724,18 +724,26 @@
      advertise_lb_snat_ip: True
      enabled : True
 
+- name: Getting SSH details
+  tags:
+    - nsxt_node_deploy
+  nsxt_ssh_details:
+  register: chaperone
+
 - name: Super User and It's Certificate Creation
   tags:
     - nsxt_node_deploy
   nsxt_superuser:
-      hostname : 192.168.100.228
-      username : vmware
-      password : VMware1!
+      hostname : "{{chaperone.hostname}}"
+      username : "{{chaperone.username}}"
+      password : "VMware1!"
       NSX_MANAGER : "{{nsx_manager_ip}}" 
       NSX_USER : "{{nsx_manager_username}}"
       NSX_PASSWORD: "{{nsx_manager_root_pwd}}"
       validate_certs: "{{validate_certs}}"
       PI_NAME : "{{nsxt_pks_superuser_name}}"
+
+
 
 - name: Creating Cert file
   tags:
@@ -746,9 +754,9 @@
   tags:
     - nsxt_node_deploy
   nsxt_selfsigned:
-      hostname : 192.168.100.228
-      username : vmware
-      password : VMware1!
+      hostname : "{{chaperone.hostname}}"
+      username : "{{chaperone.username}}"
+      password : "VMware1!"
       NSX_MANAGER_IP_ADDRESS : "{{nsx_manager_ip}}" 
       NSX_MANAGER_COMMONNAME : "nsxc-01a.corp.local"
       NSX_USER : "{{nsx_manager_username}}"
