@@ -6,13 +6,13 @@ distinguished_name = req_distinguished_name
 req_extensions = req_ext
 prompt = no
 [ req_distinguished_name ]
-countryName = "{{ nsxt_cert_country}}"
-stateOrProvinceName = "{{ nsxt_cert_city }}"
+countryName = "US"
+stateOrProvinceName = "California"
 localityName = CA
-organizationName = "{{ nsxt_cert_org_name }}"
-commonName = "{{ nsx_manager_ip }}"
+organizationName = "NSX"
+commonName = "192.168.110.31"
 [ req_ext ]
 subjectAltName = @alt_names
 [alt_names]
-DNS.1 = "{{ nsx_manager_ip }}"
+DNS.1 = "192.168.110.31"
 

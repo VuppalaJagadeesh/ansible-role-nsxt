@@ -735,7 +735,7 @@
       NSX_USER : "{{nsx_manager_username}}"
       NSX_PASSWORD: "{{nsx_manager_root_pwd}}"
       validate_certs: "{{validate_certs}}"
-      PI_NAME : "nsxt_pks_superuser"
+      PI_NAME : "{{nsxt_pks_superuser_name}}"
 
 - name: Creating Cert file
   tags:
@@ -753,5 +753,5 @@
       NSX_MANAGER_COMMONNAME : "nsxc-01a.corp.local"
       NSX_USER : "{{nsx_manager_username}}"
       NSX_PASSWORD : "{{nsx_manager_root_pwd}}"
-      validate_certs : False
-      cert_name : "nsxt_selfsigned_cert_test"
+      validate_certs : "{{validate_certs}}"
+      cert_name : "{{nsxt_cert_name}}"
