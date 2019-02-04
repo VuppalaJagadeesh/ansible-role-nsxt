@@ -10,7 +10,7 @@
   tags:
     - nsxt_node_deploy
   find:
-      paths: /var/www/html/downloads/nsxt
+      paths: /var/www/html/downloads
       patterns: "nsx*.ova"
   register: find_result
 
@@ -35,7 +35,7 @@
      netmask: "{{nsx_manager_subnetmask}}"
      admin_password: "{{nsx_manager_root_pwd}}"
      cli_password: "{{nsx_manager_cli_pwd}}"
-     path_to_ova: "/var/www/html/downloads/nsxt"
+     path_to_ova: "/var/www/html/downloads"
      ova_file: "{{find_result.files[0].path | basename}}"
      vcenter: "{{vcenter_host_ip}}"
      vcenter_user: "{{vcenter_user}}"
