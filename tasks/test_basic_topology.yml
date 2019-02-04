@@ -6,6 +6,14 @@
     - nsxt_node_deploy
   input_validation:
 
+- name: get files
+  tags:
+    - nsxt_node_deploy
+  find:
+      paths: /var/www/html/downloads/nsxt
+      patterns: "nsx*.ova"
+  register: find_result
+
 
 - ignore_errors: true
   name: deploy NSX Manager OVA
@@ -18,7 +26,7 @@
      portgroup: "{{vcenter_mgmgt_pg}}"
      cluster: "{{mgmt_cluster_name}}"
      vmname: "{{nsx_manager_vm_name}}"
-     hostname: "{{nsx_manager_host_name}}"
+     hostname: "{{nsx_manager_host_name.split('.')[0]}}"
      dns_server: "{{dns_server}}"
      dns_domain: "{{dns_domain}}"
      ntp_server: "{{ntp_servers}}"
@@ -28,7 +36,7 @@
      admin_password: "{{nsx_manager_root_pwd}}"
      cli_password: "{{nsx_manager_cli_pwd}}"
      path_to_ova: "/var/www/html/downloads/nsxt"
-     ova_file: "nsx-unified-appliance-2.3.0.0.0.10085405.ova"
+     ova_file: "{{find_result.files[0].path | basename}}"
      vcenter: "{{vcenter_host_ip}}"
      vcenter_user: "{{vcenter_user}}"
      vcenter_passwd: "{{vcenter_pwd}}"
@@ -533,6 +541,7 @@
           - "{{t0_router_port_ip}}"
           prefix_length: "{{t0_router_port_prefix_length}}"
         state: "present"
+  register: t0routerport
 
 - name: Create logical router port Tier-1
   tags:
@@ -572,7 +581,7 @@
   tags:
     - nsxt_node_deploy
   nsxt_logical_router_ports:
-        hostname: "{{nsx_manager_ip}}" 
+        hostname: "{{nsx_manager_ip}}"
         username: "{{nsx_manager_username}}"
         password: "{{nsx_manager_root_pwd}}"
         validate_certs: "{{validate_certs}}"
@@ -584,6 +593,7 @@
            target_id: "{{ linking.id }}"
         state: "present"
 
+
 - name: Create Tier-0 Static Route
   tags:
     - nsxt_node_deploy
@@ -594,11 +604,14 @@
         validate_certs: "{{validate_certs}}"
         logical_router_id: "{{ tier0.id }}"
         next_hops:
-        - administrative_distance: "{{administrative_distance}}"
+        - administrative_distance: "{{ administrative_distance }}" 
+          logical_router_port_id:
+            is_valid: true
+            target_type: LogicalRouterPort
+            target_id : "{{t0routerport.id}}"
           ip_address: "{{logical_router_t0_static_route_ip}}"
         network: "{{logical_router_t0_static_route_network}}"
         state: present
-
 
 
 - name: SNAT rules on Ops Manager
@@ -613,11 +626,6 @@
      action: "{{snat_type_for_opsmgr}}"
      match_source_network: "{{snat_source_ip_for_opsmgr}}"
      translated_network: "{{snat_translated_ip_for_opsmgr}}"
-     match_service: 
-         resource_type: "L4PortSetNSService"
-         source_ports: ["9000"]
-         destination_ports: ["9000"]
-         l4_protocol: "TCP"
      enabled: true
      state: present
   when: pks_topology == 'NAT'
@@ -634,79 +642,6 @@
      action: "{{dnat_type_for_opsmgr}}"
      match_destination_network: "{{dnat_destination_ip_for_opsmgr}}"
      translated_network: "{{dnat_translated_ip_for_opsmgr}}"
-     enabled: true
-     state: present
-  when: pks_topology == 'NAT'
-
-- name: SNAT rules on vCenter/NSX Manager
-  tags:
-    - nsxt_node_deploy
-  nsxt_nat_rules:
-     hostname: "{{nsx_manager_ip}}"  
-     username: "{{nsx_manager_username}}"
-     password: "{{nsx_manager_root_pwd}}"
-     validate_certs: "{{validate_certs}}"
-     router_name: "{{t0_router_name}}"
-     action: "{{snat_type_for_vcenter}}"
-     match_source_network: "{{snat_source_ip_for_vcenter}}"
-     translated_network: "{{snat_translated_ip_for_vcenter}}"
-     match_service: 
-         resource_type: "L4PortSetNSService"
-         source_ports: ["9000"]
-         destination_ports: ["9000"]
-         l4_protocol: "TCP"
-     enabled: true
-     state: present
-  when: pks_topology == 'NAT'
-
-- name: DNAT rules on vCenter/NSX Manager
-  tags:
-    - nsxt_node_deploy
-  nsxt_nat_rules:
-     hostname: "{{nsx_manager_ip}}" 
-     username: "{{nsx_manager_username}}"
-     password: "{{nsx_manager_root_pwd}}"
-     validate_certs: "{{validate_certs}}"
-     router_name: "{{t0_router_name}}"
-     action: "{{dnat_type_for_vcenter}}"
-     match_destination_network: "{{dnat_destination_ip_for_vcenter}}"
-     translated_network: "{{dnat_translated_ip_for_vcenter}}"
-     enabled: true
-     state: present
-  when: pks_topology == 'NAT'
-- name: SNAT rules on ESXi
-  tags:
-    - nsxt_node_deploy
-  nsxt_nat_rules:
-     hostname: "{{nsx_manager_ip}}"  
-     username: "{{nsx_manager_username}}"
-     password: "{{nsx_manager_root_pwd}}"
-     validate_certs: "{{validate_certs}}"
-     router_name: "{{t0_router_name}}"
-     action: "{{snat_type_for_esxi}}"
-     match_source_network: "{{snat_source_ip_for_esxi}}"
-     translated_network: "{{snat_translated_ip_for_esxi}}"
-     match_service: 
-         resource_type: "L4PortSetNSService"
-         source_ports: ["9000"]
-         destination_ports: ["9000"]
-         l4_protocol: "TCP"
-     enabled: true
-     state: present
-  when: pks_topology == 'NAT'
-
-- name: DNAT rules on ESXi
-  tags:
-    - nsxt_node_deploy
-  nsxt_nat_rules:
-     hostname: "{{nsx_manager_ip}}" 
-     username: "{{nsx_manager_username}}"
-     password: "{{nsx_manager_root_pwd}}"
-     validate_certs: "{{validate_certs}}"
-     router_name: "{{t0_router_name}}"
-     action: "{{dnat_type_for_esxi}}"
-     match_destination_network: "{{dnat_destination_ip_for_esxi}}"
-     translated_network: "{{dnat_translated_ip_for_esxi}}"
      enabled: true
      state: present
   when: pks_topology == 'NAT'
