@@ -86,7 +86,6 @@
      portgroup1: "{{vcenter_mgmgt_pg}}" 
      portgroup2: "{{nsx_edge_uplink_network_name}}"
      portgroup3: "{{nsx_edge_overlay_network_name}}" 
-     portgroup4: "{{nsx_edge_portgroup_external}}"
   register: moids
 
 - name: Getting Details of Controller 
@@ -297,7 +296,7 @@
          data_network_ids:
          - "{{moids.portgroup2_id}}"
          - "{{moids.portgroup3_id}}"
-         - "{{moids.portgroup4_id}}"
+         - "{{moids.portgroup1_id}}"
          management_network_id: "{{moids.portgroup1_id}}"
          hostname: "{{item.display_name}}"
          compute_id: "{{moids.cluster_id}}"
