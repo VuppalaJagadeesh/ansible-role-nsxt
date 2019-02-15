@@ -81,9 +81,9 @@
      username: "{{vcenter_user}}"
      password: "{{vcenter_pwd}}"
      datacenter: "{{vcenter_datacenter}}"
-     cluster: "{{nsx_edge_management_network_name}}"
+     cluster: "{{mgmt_cluster_name}}"
      datastore: "{{ names_of_mgmt_datastore }}"
-     portgroup1: "{{vcenter_mgmgt_pg}}" 
+     portgroup1: "{{nsx_edge_management_network_name}}" 
      portgroup2: "{{nsx_edge_uplink_network_name}}"
      portgroup3: "{{nsx_edge_overlay_network_name}}" 
   register: moids
