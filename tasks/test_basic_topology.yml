@@ -81,7 +81,7 @@
      username: "{{vcenter_user}}"
      password: "{{vcenter_pwd}}"
      datacenter: "{{vcenter_datacenter}}"
-     cluster: "{{mgmt_cluster_name}}"
+     cluster: "{{nsx_edge_management_network_name}}"
      datastore: "{{ names_of_mgmt_datastore }}"
      portgroup1: "{{vcenter_mgmgt_pg}}" 
      portgroup2: "{{nsx_edge_uplink_network_name}}"
