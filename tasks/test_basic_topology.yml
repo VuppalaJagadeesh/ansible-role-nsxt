@@ -15,7 +15,7 @@
   register: find_result
 
 
-- ignore_errors: true
+- ignore_errors: false
   name: deploy NSX Manager OVA
   tags:
     - nsxt_node_deploy
